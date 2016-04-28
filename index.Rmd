@@ -84,14 +84,14 @@ forests which exploit ensembles of decision trees and thus reduce chances of
 overfitting.
 
 Before we proceed with the actual model fitting, we will partition the data
-into a training and a test data-set, so that we can use the test data-set later
-on for checking how well our model generalizes. We are going with the default
-50-50 split here.
+into a training and a validation data-set, so that we can use the validation
+data-set later on for cross-checking how well our model generalizes. We are
+going with the default 50-50 split here.
 
 ```{r}
 train_idx <- createDataPartition(dat_raw$class, list = FALSE)
 dat_train <- dat_raw[train_idx, ]
-dat_test <- dat_raw[-train_idx, ]
+dat_validate <- dat_raw[-train_idx, ]
 ```
 
 It is now time to fit a random-forest model to the training data. We will
@@ -99,7 +99,7 @@ use the caret package for this, since it not only provides a convenient unified
 wrapper over various modelling techniques, but also automatically performs
 parameter tuning for determining the best model which fits the training data
 well while also not overfitting too much. For the latter part, we will instruct
-caret to use cross-validation with 10 folds.
+caret to use k-fold cross-validation with 10 folds.
 
 ```{r}
 trc <- trainControl(method = "cv", number = 10)
@@ -113,10 +113,10 @@ mean(predict(rfmod) == dat_train$class)
 ```
 
 We seem to have achieved an astounding 100% accuracy on the training data. But
-the real test is on the data-set we have held out for validation purposes.
+the real test is on the data-set we have held out for cross-validation purposes.
 
 ```{r}
-mean(predict(rfmod, newdata = dat_test) == dat_test$class)
+mean(predict(rfmod, newdata = dat_validate) == dat_validate$class)
 ```
 
 We can see that the model we have trained manages to achieve an accuracy level
