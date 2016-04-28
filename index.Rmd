@@ -1,0 +1,132 @@
+---
+title: "Practical Machine Learning course project"
+author: "Hemanta Gupta"
+date: "April 27, 2016"
+output: html_document
+---
+
+The aim of this assignment is to attempt to use machine-learning techniques to
+predict how well a user is performing weight-lifting exercises based on
+readings obtained from various sensors attached to the user. More details
+around the motivation for this experiment and the associated data-set can
+be found at http://groupware.les.inf.puc-rio.br/har
+
+We start off by loading the training data-set made available to us. This data
+can be downloaded from
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv for
+those wishing to reproduce this exercise.
+
+```{r, warning=FALSE, message=FALSE}
+library(caret)
+set.seed(3343)
+dat <- read.csv("pml-training.csv")
+```
+
+Let us check what the features of the data look like:
+
+```{r}
+str(dat)
+```
+
+We can see that the data has 160 features, and most of these features seem to
+be related to roll, pitch and yaw angle readings, as well as accelerometer,
+gyroscope and magnetometer readings. Based on the paper at
+http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf,
+we see that these features include raw readings as well as features derived
+from the raw values (e.g. mean, variance, std dev, etc.).
+
+Since 160 features is already a lot, we will attempt to bring the number
+down to a more reasonable value and then perform any feature engineering
+necessary for obtaining a good predictive model. A rather intuitive thing
+to do is to strip away the derived features, retain only the raw sensor
+readings, start training predictive models on the raw values and then perform
+extra feature engineering if the initial models don't perform satisfactorily.
+
+Based on the data summary above, we can see that the raw readings are in the
+columns whose names start with the reading type (e.g. 'roll_belt',
+'accel_belt_x') while the derived values are in the columns whose names start
+with the type of derivation performed (e.g. 'max_roll_belt',
+'total_accel_belt'). We can use this pattern for trimming the data set to
+include only the raw readings and the target variable to be predicted
+(i.e. the class).
+
+```{r}
+cn <- colnames(dat)
+raw_col_names <- cn[grep("^(roll|pitch|yaw|gyros|accel|magnet)_", cn)]
+dat_raw <- dat[, raw_col_names]
+dat_raw$class <- dat$classe
+```
+
+Let us check what the trimmed data-set looks like:
+
+```{r}
+str(dat_raw)
+```
+
+We are now down to a more manageable set of 48 features (plus one target
+column). Further, we can see that all the features are numerical/integer
+values as we'd expect from sensor readings, and there are no unexpected
+number-misinterpreted-as-factor columns present which might cause the trained
+model to behave in strange ways (as there were in the original data). So no
+further data cleaning is required at this point and we can proceed with the
+initial model training.
+
+The next question is what kind of model we train on the trimmed data. Though
+we have brought the number of features down drastically, we're still left
+with 48 features, and it's very hard to confirm via visual data exploration
+whether there's a linear correlation (or indeed any kind of parametric
+correlation, e.g. polynomial) between the target variable and the features. So
+for this problem we will not attempt to use any of the parametric techniques
+like logistic regression, and instead go with non-parametric techniques like
+decision trees which make no prior assumptions about what the decision
+boundaries look like. Going one step above decision trees, we will use random
+forests which exploit ensembles of decision trees and thus reduce chances of
+overfitting.
+
+Before we proceed with the actual model fitting, we will partition the data
+into a training and a test data-set, so that we can use the test data-set later
+on for checking how well our model generalizes. We are going with the default
+50-50 split here.
+
+```{r}
+train_idx <- createDataPartition(dat_raw$class, list = FALSE)
+dat_train <- dat_raw[train_idx, ]
+dat_test <- dat_raw[-train_idx, ]
+```
+
+It is now time to fit a random-forest model to the training data. We will
+use the caret package for this, since it not only provides a convenient unified
+wrapper over various modelling techniques, but also automatically performs
+parameter tuning for determining the best model which fits the training data
+well while also not overfitting too much. For the latter part, we will instruct
+caret to use cross-validation with 10 folds.
+
+```{r}
+trc <- trainControl(method = "cv", number = 10)
+rfmod <- train(class ~ ., data = dat_train, method = "rf", trControl=trc)
+```
+
+Let us check the accuracy of this model on the data it was trained upon.
+
+```{r}
+mean(predict(rfmod) == dat_train$class)
+```
+
+We seem to have achieved an astounding 100% accuracy on the training data. But
+the real test is on the data-set we have held out for validation purposes.
+
+```{r}
+mean(predict(rfmod, newdata = dat_test) == dat_test$class)
+```
+
+We can see that the model we have trained manages to achieve an accuracy level
+of around 99% even on data it has not seen earlier. This is a very high level
+of accuracy, and hence we stop here with no further attempts to perform any
+additional feature engineering or manual parameter tuning, since the latter are
+unlikely to provide us with a model which performs significantly better.
+
+In conclusion, we can say with a high degree of confidence that a random-forest
+based model trained on only the raw sensor readings can predict with a very
+high degree of accuracy how well a weight-lifting exercise is being performed.
+This kind of model can be expected to provide an out-of-sample accuracy of
+around 99%, or conversely an out-of-sample error rate of only around 1%.
